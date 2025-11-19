@@ -3,7 +3,8 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Звіт A4 - Інтерактивний Шаблон</title>
+    <title>Звіт A4 - Інтерактивний Шаблон з KaTeX</title>
+    
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/katex@0.16.8/dist/katex.min.css" integrity="sha384-GvrS47g8e2J4J+Y/0vNnF8X08n/J/R7iSg6Z7v0E9X1P2p08B1V3N5F8t4D01Yl" crossorigin="anonymous">
     <script defer src="https://cdn.jsdelivr.net/npm/katex@0.16.8/dist/katex.min.js" integrity="sha384-k7HkFv+g077F5rG5Wv3b1Z1S1nF5F4B1T7wF2P1Y2p08B1V3N5F8t4D01Yl" crossorigin="anonymous"></script>
     <script defer src="https://cdn.jsdelivr.net/npm/katex@0.16.8/dist/contrib/auto-render.min.js" integrity="sha384-M+p5t6e/e5JvRz2a3F0Q1p2E5N7G5K5z1P1p08B1V3N5F8t4D01Yl" crossorigin="anonymous" onload="rerenderAll()"></script>
@@ -27,7 +28,7 @@
             box-shadow: 0 0 5px rgba(0, 0, 0, 0.1);
             box-sizing: border-box;
             page-break-after: always;
-            word-wrap: break-word; /* Для коректного перенесення довгих рядків */
+            word-wrap: break-word; 
         }
         
         .page:last-child {
@@ -41,6 +42,15 @@
             padding: 1px 3px;
             border-radius: 3px;
             cursor: pointer;
+            user-select: none; /* Забороняємо виділяти сам span */
+        }
+        
+        .page > div {
+             /* Стиль для contenteditable поля */
+            min-height: 25cm;
+            outline: none;
+            white-space: pre-wrap; /* Зберігає форматування при вставленні (Enter) */
+            caret-color: black;
         }
 
         /* Стилі для панелі управління */
@@ -59,8 +69,17 @@
             box-shadow: 0 2px 5px rgba(0, 0, 0, 0.2);
         }
         
+        #controls hr {
+            width: 80%;
+            border: 0;
+            border-top: 1px solid #ccc;
+        }
+
         /* Стилі для друку */
         @media print {
+            #controls {
+                display: none; 
+            }
             body, .page {
                 background: white;
                 margin: 0;
@@ -71,20 +90,16 @@
                 width: 100%;
                 min-height: auto;
             }
-            #controls {
-                display: none; /* Приховуємо кнопки при друку */
-            }
         }
     </style>
     
     <script>
         document.addEventListener("DOMContentLoaded", function() {
-            // Ініціалізація першої сторінки та кнопок
-            addPage();
+            addPage(); // Ініціалізація першої сторінки
         });
 
         const RENDER_CONFIG = {
-            // Використовуємо $...$ для inline-формул і $$...$$ для display-формул
+            // Конфігурація для авто-рендерингу всього документа
             delimiters: [
                 {left: '$$', right: '$$', display: true},
                 {left: '$', right: '$', display: false},
@@ -94,7 +109,7 @@
             throwOnError : false
         };
 
-        // Функція для повного перетворення всього документа (аналог "Перетворити ВСЕ")
+        // Функція для повного перетворення всього документа (Перетворити ВСЕ)
         function rerenderAll() {
             const container = document.getElementById("content-container");
             renderMathInElement(container, RENDER_CONFIG);
@@ -105,21 +120,28 @@
             const container = document.getElementById('content-container');
             const newPage = document.createElement('div');
             newPage.className = 'page';
-            // Вміст сторінки можна редагувати
+            
             newPage.innerHTML = `
-                <div contenteditable="true" spellcheck="false" style="min-height: 25cm; outline: none; white-space: pre-wrap; caret-color: black;">
-                    Вставте тут текст з формулами LaTeX.
-                    Наприклад, рівняння маси: $E=mc^2$.
+                <div contenteditable="true" spellcheck="false">
+                    Вставте тут текст з формулами LaTeX. Наприклад, рівняння Ейлера: $e^{i\pi} + 1 = 0$.
                 </div>
             `;
             container.appendChild(newPage);
-            // Викликаємо загальний рендеринг, щоб KaTeX опрацював новий вміст, якщо він є
+            
+            // Якщо сторінка не перша, додаємо візуальний роздільник для кращої навігації
+            if (container.children.length > 1) {
+                const breakDiv = document.createElement('div');
+                breakDiv.className = 'page-break-divider'; // Використовуємо окремий клас
+                container.insertBefore(breakDiv, newPage);
+            }
+            
+            // Фокусуємо курсор на новій сторінці
+            newPage.querySelector('[contenteditable]').focus();
             rerenderAll();
         }
 
         // Функція для дублювання Enter (вставлення розриву рядка)
         function insertBreak() {
-            // document.execCommand працює добре для contenteditable
             document.execCommand('insertHTML', false, '<br>');
         }
 
@@ -130,53 +152,67 @@
             if (selection.rangeCount === 0) return;
 
             if (mark) {
-                // 1. Маркування: обгортаємо виділення у span з класом
+                // Маркування: обгортаємо виділення у span з класом
                 document.execCommand('insertHTML', false, `<span class="${className}">` + selection.toString() + '</span>');
             } else {
-                // 2. Зняття маркування: видаляємо клас/тег з виділеної ділянки
+                // Зняття маркування: видаляємо span (зберігаючи вміст)
                 const range = selection.getRangeAt(0);
                 const parentElement = range.commonAncestorContainer.parentNode;
 
-                // Перевіряємо, чи батьківський елемент є нашим маркованим span
                 if (parentElement.classList && parentElement.classList.contains(className)) {
                     // Видаляємо span, зберігаючи його вміст
                     const content = parentElement.innerHTML;
+                    // OuterHTML замінює сам елемент і його вміст на лише вміст
                     parentElement.outerHTML = content; 
                 }
             }
         }
 
-        // Функція для перетворення маркованого тексту у формули KaTeX
+        // Посилена функція для перетворення маркованого тексту у формули KaTeX
         function convertFormulas() {
             const candidates = document.querySelectorAll('.formula-candidate');
             
             candidates.forEach(span => {
-                let formulaText = span.textContent.trim();
+                let formulaText = span.textContent; 
                 
-                // --- Очищення та виправлення синтаксису (для коректного копіювання) ---
-                // Видалення фігурних дужок, які можуть з'явитися при копіюванні
-                formulaText = formulaText.replace(/\{/g, '').replace(/\}/g, '').trim();
+                // --- Агресивне Очищення та Виправлення Синтаксису ---
                 
-                // Видалення зайвих пробілів навколо $$, якщо вони є
+                // 1. Видалення фігурних дужок, які часто з'являються при копіюванні { та }
+                formulaText = formulaText.replace(/\{/g, '').replace(/\}/g, ''); 
+                
+                // 2. Видалення зайвих пробілів навколо $$, $ та \
                 formulaText = formulaText.replace(/\s*\$\$\s*/g, '$$'); 
-
+                formulaText = formulaText.replace(/\s*\$\s*/g, '$');
+                formulaText = formulaText.replace(/\\ /g, '\\'); // Прибираємо пробіли після слешів
+                
+                // 3. Обрізання пробілів тільки на початку і в кінці всього рядка
+                formulaText = formulaText.trim();
+                
                 // --- Запускаємо рендеринг KaTeX ---
                 let targetElement = span;
-                targetElement.innerHTML = '';
+                targetElement.innerHTML = ''; // Очищаємо вміст для рендерингу
                 
                 try {
-                    katex.render(formulaText, targetElement, {
-                        displayMode: formulaText.startsWith('$$') && formulaText.endsWith('$$'), // Блочний режим, якщо є $$
-                        throwOnError: false // Не викидати помилку
+                    const isDisplayMode = formulaText.startsWith('$$') && formulaText.endsWith('$$');
+                    
+                    let renderText = formulaText;
+                    if (isDisplayMode) {
+                         // Обрізаємо $$ з початку і кінця для коректної передачі в KaTeX
+                         renderText = renderText.substring(2, renderText.length - 2).trim();
+                    }
+                    
+                    katex.render(renderText, targetElement, {
+                        displayMode: isDisplayMode,
+                        throwOnError: false 
                     });
                     
                     // Якщо рендеринг успішний, видаляємо клас маркування
                     span.classList.remove('formula-candidate');
-                    span.style.color = 'inherit'; // Повертаємо нормальний колір
-                    span.style.background = 'inherit'; // Повертаємо нормальний фон
+                    span.style.color = 'inherit'; 
+                    span.style.background = 'inherit'; 
                     
                 } catch (e) {
-                    // Якщо рендеринг не вдався, залишаємо маркування, але міняємо колір на червоний
+                    // Якщо рендеринг не вдався, позначаємо червоним
                     console.error("Помилка рендерингу KaTeX:", e);
                     span.style.color = 'red'; 
                     span.style.background = '#f4433650'; 
@@ -194,11 +230,10 @@
         <button onclick="markSelection(false)">🚫 Відмінити Виділення</button>
         <button onclick="convertFormulas()">⚛️ Перетворити у Формулу</button>
         <hr>
-        <button onclick="rerenderAll()">🔄 Перетворити ВСЕ</button>
+        <button onclick="rerenderAll()">🔄 Перетворити ВСЕ (Авто)</button>
     </div>
     
     <div id="content-container">
         </div>
 </body>
 </html>
-
